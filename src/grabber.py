@@ -1,6 +1,9 @@
+import logging
+
 import requests
 import urllib.parse
 import os
+import zipfile
 
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -24,7 +27,7 @@ def redirect2url(loc: str):
     return link
 
 
-def download(url):
+def download(url, index):
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:83.0) Gecko/20100101 Firefox/83.0',
     }
@@ -36,10 +39,19 @@ def download(url):
     r.close()
 
     r = requests.get(direct_url, headers=headers)
-    name = direct_url[direct_url.rfind('/')+1:].replace(':', '_')
-    with open(os.path.join(MEDIA_DIR, name), 'wb') as f:
+    name = str(index) + '_' + direct_url[direct_url.rfind('/')+1:].replace(':', '_')
+    file = os.path.join(MEDIA_DIR, name)
+    with open(file, 'wb') as f:
         f.write(r.content)
     r.close()
+
+    if name.endswith(".zip"):
+        try:
+            with zipfile.ZipFile(file, 'r') as z:
+                z.extractall(MEDIA_DIR)
+        except:
+            logging.exception("Error occured while unzipping {}".format(name))
+
     return True
 
 
@@ -48,10 +60,10 @@ def main():
         os.mkdir(MEDIA_DIR)
 
     bads = []
-    for i in range(10335, pow(16, 6)):
+    for i in range(14280, pow(16, 6)):
         url = "http://gs.3g.cn/D/{}/w".format(hex(i)[2:])
         print("{}: {}".format(i, url))
-        if not download(url):
+        if not download(url, i):
             bads.append(i)
     print(bads)
 
