@@ -4,17 +4,20 @@ import threading
 import urllib.parse
 import zipfile
 import sys
+import shutil
 
 import requests
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(SCRIPT_DIR)
 
-import face
+# import face
+from text import check_image
 
 # MEDIA_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "all")
 MEDIA_DIR = "d:\\gosms\\all"
-FACE_DIR = os.path.join(MEDIA_DIR, "face")
+# FACE_DIR = os.path.join(MEDIA_DIR, "face")
+GOOD_DIR = os.path.join(MEDIA_DIR, "good")
 BADS_FILE = os.path.join(SCRIPT_DIR, "bads.txt")
 
 
@@ -30,10 +33,10 @@ class SafeIterator:
 
     def get_next(self) -> int:
         with self._mtx:
-            if self._cur > self._end:
+            if self._cur < self._end:
                 return -1
             ret = self._cur
-            self._cur += 1
+            self._cur -= 1
             return ret
 
 
@@ -70,8 +73,14 @@ class Worker(threading.Thread):
         print("{}: {}".format(ttt, link))
         return link
 
-    @staticmethod
-    def _extract_zip(file: str, to_dir: str, index: int):
+    def _detect_text(self, sub_path: str):
+        path = os.path.join(MEDIA_DIR, sub_path)
+        if check_image(path):
+            to = os.path.join(GOOD_DIR, sub_path)
+            os.makedirs(os.path.dirname(to), exist_ok=True)
+            shutil.copyfile(path, to)
+
+    def _extract_zip(self, file: str, to_dir: str, index: int):
         with zipfile.ZipFile(file) as zf:
             for name in zf.namelist():
                 zi_path = name.replace('\\', '/').split('/')
@@ -81,11 +90,10 @@ class Worker(threading.Thread):
                 os.makedirs(os.path.dirname(out_path), exist_ok=True)
                 with open(out_path, "wb") as f:
                     f.write(zf.read(name))
-                face.detect_face(MEDIA_DIR, FACE_DIR, os.path.join(subdir(index), zi_path))
+                self._detect_text(os.path.join(subdir(index), zi_path))
+                # face.detect_face(MEDIA_DIR, FACE_DIR, os.path.join(subdir(index), zi_path))
 
-
-    @staticmethod
-    def _download(url: str, index: int) -> bool:
+    def _download(self, url: str, index: int) -> bool:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:83.0) Gecko/20100101 Firefox/83.0',
         }
@@ -109,12 +117,13 @@ class Worker(threading.Thread):
 
         if name.endswith(".zip"):
             try:
-                Worker._extract_zip(file, media_subdir, index)
+                self._extract_zip(file, media_subdir, index)
                 os.remove(file)
             except:
                 logging.exception("Error occured while unzipping {}".format(name))
         else:
-            face.detect_face(MEDIA_DIR, FACE_DIR, os.path.join(subdir(index), name))
+            # face.detect_face(MEDIA_DIR, FACE_DIR, os.path.join(subdir(index), name))
+            self._detect_text(os.path.join(subdir(index), name))
 
         return True
 
@@ -125,15 +134,16 @@ class Worker(threading.Thread):
                 return
             url = "http://gs.3g.cn/D/{}/w".format(hex(index)[2:])
             print("{}: {}".format(index, url))
-            if not Worker._download(url, index):
+            if not self._download(url, index):
                 self._bad.reg(index)
 
 
 def main():
     ws = []
-    it = SafeIterator(158100, pow(16, 6))
+    # it = SafeIterator(191800, 12582911)
+    it = SafeIterator(12503480, 191800)
     bad = BadRegister()
-    for i in range(64):
+    for i in range(16):
         w = Worker(it, bad)
         ws.append(w)
         w.start()
